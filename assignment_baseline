@@ -1,0 +1,71 @@
+import pandas as pd
+
+# read in dataset -- is emergency admits only
+emer = pd.read_csv('EmergencyICD4.csv')
+
+# convert dates to datetime
+emer['ADMITTIME'] = pd.to_datetime(emer['ADMITTIME'])
+emer['DISCHTIME'] = pd.to_datetime(emer['DISCHTIME'])
+
+# split out date and time into separate columns
+emer['admit_date'] = [d.date() for d in emer['ADMITTIME']]
+emer['admit_time'] = [d.time() for d in emer['ADMITTIME']]
+emer['disch_date'] = [d.date() for d in emer['DISCHTIME']]
+emer['disch_time'] = [d.time() for d in emer['DISCHTIME']]
+
+# create list of ICD-9 codes that make up the top 40% of admits
+emer['DIAG.ICD9_CODE'].value_counts().head(30).sum() #17540
+icdtouse = pd.DataFrame(emer['DIAG.ICD9_CODE'].value_counts().head(30))
+icdtouse.head()
+icd = icdtouse.index
+
+# makes dictionary of overall counts for each icd-9 code
+capture_overall = {"OTHER": 0}
+for index, row in emer.iterrows():
+    if row['DIAG.ICD9_CODE'] in icd:
+        if row['DIAG.ICD9_CODE'] not in capture_overall:
+            capture_overall[row['DIAG.ICD9_CODE']] = 0
+        capture_overall[row['DIAG.ICD9_CODE']] = capture_overall[row['DIAG.ICD9_CODE']] + 1
+    else:
+        capture_overall['OTHER'] = capture_overall['OTHER'] + 1
+
+#for each in capture_overall:
+#    print("{} : {}".format(each, capture_overall[each]))
+
+# makes dictionary of counts of each icd-9 code by day
+capture_by_day = {}
+for index, row in emer.iterrows():
+    if row['admit_date'] not in capture_by_day:
+        capture_by_day[row['admit_date']] = {}
+
+    if row['DIAG.ICD9_CODE'] in icd:
+        if row['DIAG.ICD9_CODE'] not in capture_by_day[row['admit_date']]:
+            capture_by_day[row['admit_date']][row['DIAG.ICD9_CODE']] = 0
+        capture_by_day[row['admit_date']][row['DIAG.ICD9_CODE']] = capture_by_day[row['admit_date']][row['DIAG.ICD9_CODE']] + 1
+    else:
+        if 'OTHER' not in capture_by_day[row['admit_date']]:
+            capture_by_day[row['admit_date']]['OTHER'] = 0
+        capture_by_day[row['admit_date']]['OTHER'] = capture_by_day[row['admit_date']]['OTHER'] + 1
+
+#for each in capture_by_day:
+#    print(each)
+#    for every in capture_by_day[each]:
+#        print('\t {} : {}'.format(every, capture_by_day[each][every]))
+
+# change capture by day dictionary into matrix type form
+byday = pd.DataFrame(capture_by_day)
+byday = byday.transpose()
+
+# make separate columns for the year, day, and month
+# bump out index as a column
+byday['admitdate'] = byday.index
+#byday['admitdate'] = pd.to_datetime(byday['admitdate'])
+# split it into year, month, day columns
+steal_dates = pd.DatetimeIndex(byday['admitdate'])
+byday['year'] = steal_dates.year
+byday['month'] = steal_dates.month
+byday['day'] = steal_dates.day
+
+# sort the dataframe by year, then by month, then by day
+# so it appears in chronological order
+byday = byday.sort_values(by=['year', 'month', 'day'])
